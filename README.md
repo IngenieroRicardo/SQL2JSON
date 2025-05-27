@@ -13,6 +13,7 @@ Libreria C para consultas a Bases de Datos MariaDB/MySQL con Resultado JSON, Lib
 | Linux | Windows |
 | --- | --- |
 | `gcc -o main.bin main.c ./SQLrun.so` | `gcc -o main.exe main.c ./SQLrun.dll` |
+| `x86_64-w64-mingw32-gcc -o main.exe main.c ./SQLrun.dll` |  |
 
 
 Ejemplo:
