@@ -9,7 +9,7 @@ wget https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main
 
 Descargar libreria dentro del proyecto en Windows:
 ```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.dll
+Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.dll -OutFile ./SQLrun.dll
 Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.h
 ```
 
