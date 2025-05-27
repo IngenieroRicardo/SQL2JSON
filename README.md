@@ -48,7 +48,7 @@ Ejemplo:
 
 int main() {
     char* conn = "root:123456@tcp(127.0.0.1:3306)/chat";
-    char* query = "INSERT INTO chat.usuario(nickname, picture)VALUES  (?, ?);";
+    char* query = "INSERT INTO chat.usuario(nickname, picture) VALUES (?, ?);";
     
     // Preparar argumentos
     char* args[2];
