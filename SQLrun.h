@@ -22,6 +22,7 @@ typedef struct { const char *p; ptrdiff_t n; } _GoString_;
 #line 3 "SQLrun.go"
 
 #include <stdlib.h>
+#include <string.h>
 
 #line 1 "cgo-generated-wrapper"
 
@@ -78,7 +79,6 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 #ifdef _WIN32 
 extern __declspec(dllexport) char* SQLrun(char* conexion, char* query, char** args, int argCount);
