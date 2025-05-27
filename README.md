@@ -38,3 +38,44 @@ int main() {
     return 0;
 }
 ```
+
+
+Ejemplo:
+```C
+#include <stdio.h>
+#include <stdlib.h>
+#include "SQLrun.h"
+
+int main() {
+    char* conn = "root:123456@tcp(127.0.0.1:3306)/chat";
+    char* query = "INSERT INTO chat.usuario(nickname, picture)VALUES  (?, ?);";
+    
+    // Preparar argumentos
+    char* args[2];
+    
+    // String (normal)
+    args[0] = "Ricardo";
+    
+    // Blob (imagen en base64) //int::  float::  double::  bool::  null::  blob::
+    args[1] = "blob::iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAArSURBVBhXY/iPA0AlGBgwGFAKlwQmAKrAIgcVRZODCsI5cAAVgVDo4P9/AHe4m2U/OJCWAAAAAElFTkSuQmCC";
+    
+    // Convertir a arreglo de char*
+    char** args_ptr = (char**)malloc(2 * sizeof(char*));
+    for (int i = 0; i < 2; i++) {
+        args_ptr[i] = strdup(args[i]);
+    }
+    
+    // Ejecutar consulta
+    char* result = SQLrun(conn, query, args_ptr, 2);
+    printf("Resultado: %s\n", result);
+    
+    // Liberar memoria
+    FreeString(result);
+    for (int i = 0; i < 2; i++) {
+        free(args_ptr[i]);
+    }
+    free(args_ptr);
+    
+    return 0;
+}
+```
