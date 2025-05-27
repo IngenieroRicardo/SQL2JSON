@@ -2,7 +2,7 @@
 
 Librería en C para realizar consultas a bases de datos MariaDB/MySQL y obtener los resultados en formato JSON.  
 Esta librería está basada en el proyecto original: https://gitlab.com/RicardoValladares/api-mysql.git  
-Fue recompilada usando el siguiente comando: go build -o SQLrun.dll -buildmode=c-shared SQLrun.go
+Fue recompilada usando el siguiente comando: go build -o SQL2JSON.dll -buildmode=c-shared SQL2JSON.go
 
 ---
 
@@ -10,8 +10,8 @@ Fue recompilada usando el siguiente comando: go build -o SQLrun.dll -buildmode=c
 
 | Linux | Windows |
 | --- | --- |
-| `wget https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.so` | `Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.dll -OutFile ./SQLrun.dll` |
-| `wget https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.h` | `Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.h -OutFile ./SQLrun.h` |
+| `wget https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQL2JSON.so` | `Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQL2JSON.dll -OutFile ./SQL2JSON.dll` |
+| `wget https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQL2JSON.h` | `Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQL2JSON.h -OutFile ./SQL2JSON.h` |
 
 ---
 
@@ -19,8 +19,8 @@ Fue recompilada usando el siguiente comando: go build -o SQLrun.dll -buildmode=c
 
 | Linux | Windows |
 | --- | --- |
-| `gcc -o main.bin main.c ./SQLrun.so` | `gcc -o main.exe main.c ./SQLrun.dll` |
-| `x86_64-w64-mingw32-gcc -o main.exe main.c ./SQLrun.dll` |  |
+| `gcc -o main.bin main.c ./SQL2JSON.so` | `gcc -o main.exe main.c ./SQL2JSON.dll` |
+| `x86_64-w64-mingw32-gcc -o main.exe main.c ./SQL2JSON.dll` |  |
 
 ---
 
