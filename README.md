@@ -1,22 +1,31 @@
 # SQL2JSON
-Libreria C para consultas a Bases de Datos MariaDB/MySQL con Resultado JSON, Libreria basada en el proyecto: https://gitlab.com/RicardoValladares/api-mysql.git se recompilo usando: go build -o SQLrun.dll -buildmode=c-shared SQLrun.go
 
+Librería en C para realizar consultas a bases de datos MariaDB/MySQL y obtener los resultados en formato JSON.  
+Esta librería está basada en el proyecto original: https://gitlab.com/RicardoValladares/api-mysql.git  
+Fue recompilada usando el siguiente comando: go build -o SQLrun.dll -buildmode=c-shared SQLrun.go
 
-### Descargar Libreria:
+---
+
+### 📥 Descargar la librería
+
 | Linux | Windows |
 | --- | --- |
 | `wget https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.so` | `Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.dll -OutFile ./SQLrun.dll` |
 | `wget https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.h` | `Invoke-WebRequest https://raw.githubusercontent.com/IngenieroRicardo/SQL2JSON/refs/heads/main/SQLrun.h -OutFile ./SQLrun.h` |
 
+---
 
-### Compilar:
+### 🛠️ Compilar
+
 | Linux | Windows |
 | --- | --- |
 | `gcc -o main.bin main.c ./SQLrun.so` | `gcc -o main.exe main.c ./SQLrun.dll` |
 | `x86_64-w64-mingw32-gcc -o main.exe main.c ./SQLrun.dll` |  |
 
+---
 
-Ejemplo:
+### 🧪 Ejemplo básico
+
 ```C
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,8 +49,10 @@ int main() {
 }
 ```
 
+---
 
-Ejemplo:
+### 🧪 Ejemplo con parámetros
+
 ```C
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,13 +64,9 @@ int main() {
     
     // Preparar argumentos
     char* args[2];
-    
-    // String (normal)
-    args[0] = "Ricardo";
-    
-    // Blob (imagen en base64) //int::  float::  double::  bool::  null::  blob::
-    args[1] = "blob::iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAArSURBVBhXY/iPA0AlGBgwGFAKlwQmAKrAIgcVRZODCsI5cAAVgVDo4P9/AHe4m2U/OJCWAAAAAElFTkSuQmCC";
-    
+    args[0] = "Ricardo";  // String simple
+    args[1] = "blob::iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAArSURBVBhXY/iPA0AlGBgwGFAKlwQmAKrAIgcVRZODCsI5cAAVgVDo4P9/AHe4m2U/OJCWAAAAAElFTkSuQmCC";  // Imagen en base64
+
     // Convertir a arreglo de char*
     char** args_ptr = (char**)malloc(2 * sizeof(char*));
     for (int i = 0; i < 2; i++) {
@@ -80,3 +87,17 @@ int main() {
     return 0;
 }
 ```
+
+
+
+📝 Los tipos de datos soportados en los argumentos son:
+- `string` (por defecto)
+- `int::123`
+- `float::3.14`
+- `double::2.718`
+- `bool::true` / `bool::false`
+- `null::`
+- `blob::<base64>`
+
+---
+
