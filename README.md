@@ -29,7 +29,7 @@ Fue recompilada usando el siguiente comando: go build -o SQLrun.dll -buildmode=c
 ```C
 #include <stdio.h>
 #include <stdlib.h>
-#include "SQLrun.h"
+#include "SQL2JSON.h"
 
 int main() {
     // Configuración de conexión
@@ -56,7 +56,7 @@ int main() {
 ```C
 #include <stdio.h>
 #include <stdlib.h>
-#include "SQLrun.h"
+#include "SQL2JSON.h"
 
 int main() {
     char* conn = "root:123456@tcp(127.0.0.1:3306)/chat";
