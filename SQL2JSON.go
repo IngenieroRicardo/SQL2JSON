@@ -9,12 +9,23 @@ import "C"
 import (
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"unsafe"
 	_ "github.com/go-sql-driver/mysql"
 )
+
+// ErrorResponse representa una respuesta de error estandarizada
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
+// SuccessResponse representa una respuesta exitosa para operaciones sin resultado
+type SuccessResponse struct {
+	Status string `json:"status"`
+}
 
 //export SQLrun
 func SQLrun(conexion *C.char, query *C.char, args **C.char, argCount C.int) *C.char {
@@ -31,7 +42,7 @@ func SQLrun(conexion *C.char, query *C.char, args **C.char, argCount C.int) *C.c
 			case strings.HasPrefix(argStr, "int::"):
 				intVal, err := strconv.ParseInt(argStr[5:], 10, 64)
 				if err != nil {
-					return C.CString(fmt.Sprintf(`{"error":"Error parseando entero: %s"}`, argStr[5:]))
+					return createErrorResponse(fmt.Sprintf("Error parseando entero: %s", argStr[5:]))
 				}
 				goArgs = append(goArgs, intVal)
 
@@ -42,14 +53,14 @@ func SQLrun(conexion *C.char, query *C.char, args **C.char, argCount C.int) *C.c
 				}
 				floatVal, err := strconv.ParseFloat(argStr[prefixLen:], 64)
 				if err != nil {
-					return C.CString(fmt.Sprintf(`{"error":"Error parseando float: %s"}`, argStr[prefixLen:]))
+					return createErrorResponse(fmt.Sprintf("Error parseando float: %s", argStr[prefixLen:]))
 				}
 				goArgs = append(goArgs, floatVal)
 
 			case strings.HasPrefix(argStr, "bool::"):
 				boolVal, err := strconv.ParseBool(argStr[6:])
 				if err != nil {
-					return C.CString(fmt.Sprintf(`{"error":"Error parseando booleano: %s"}`, argStr[6:]))
+					return createErrorResponse(fmt.Sprintf("Error parseando booleano: %s", argStr[6:]))
 				}
 				goArgs = append(goArgs, boolVal)
 
@@ -59,7 +70,7 @@ func SQLrun(conexion *C.char, query *C.char, args **C.char, argCount C.int) *C.c
 			case strings.HasPrefix(argStr, "blob::"):
 				data, err := base64.StdEncoding.DecodeString(argStr[6:])
 				if err != nil {
-					return C.CString(fmt.Sprintf(`{"error":"Error decodificando blob: %v"}`, err))
+					return createErrorResponse(fmt.Sprintf("Error decodificando blob: %v", err))
 				}
 				goArgs = append(goArgs, data)
 
@@ -74,92 +85,109 @@ func SQLrun(conexion *C.char, query *C.char, args **C.char, argCount C.int) *C.c
 }
 
 func sqlRunInternal(conexion, query string, args ...any) (int, string) {
-	respuesta := "["
 	db, err := sql.Open("mysql", conexion)
 	if err != nil {
-		db.Close()
-		return 1, "No se logro aperturar conexion a: " + conexion + "\n"
+		return 1, createErrorJSON(fmt.Sprintf("Error al abrir conexión: %v", err))
 	}
 	defer db.Close()
+
+	// Verificar si la conexión es válida
+	err = db.Ping()
+	if err != nil {
+		return 1, createErrorJSON(fmt.Sprintf("Error al conectar a la base de datos: %v", err))
+	}
+
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		db.Close()
-		rows.Close()
-		return 1, "No se logro ejecutar la query: " + query + "\n"
+		return 1, createErrorJSON(fmt.Sprintf("Error en la consulta SQL: %v", err))
 	}
 	defer rows.Close()
 
-	llaves := 0
+	columns, err := rows.Columns()
+	if err != nil {
+		return 1, createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err))
+	}
 
-	for {
-		colTypes, err := rows.ColumnTypes()
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return 1, createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err))
+	}
+
+	var results []map[string]interface{}
+	values := make([]sql.RawBytes, len(columns))
+	scanArgs := make([]interface{}, len(values))
+	for i := range values {
+		scanArgs[i] = &values[i]
+	}
+
+	for rows.Next() {
+		err = rows.Scan(scanArgs...)
 		if err != nil {
-			db.Close()
-			rows.Close()
-			return 1, "No se logro obtener el tipado al ejecutar la query: " + query + "\n"
-		}		
-		columns, err := rows.Columns()
-		if err != nil {
-			db.Close()
-			rows.Close()
-			return 1, "No se logro obtener respuesta al ejecutar la query: " + query + "\n"
-		}
-		values := make([]sql.RawBytes, len(columns))
-		scanArgs := make([]interface{}, len(values))
-		for i := range values {
-			scanArgs[i] = &values[i]
+			return 1, createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err))
 		}
 
-		for rows.Next() {
-			err = rows.Scan(scanArgs...)
-			if err != nil {
-				db.Close()
-				rows.Close()
-				return 1, "No se logro obtener datos al ejecutar la query: " + query + "\n"
-			}
-			if llaves == 0 {
-				respuesta = respuesta + "\n\t{"
-				llaves = llaves + 1
+		rowData := make(map[string]interface{})
+		for i, col := range values {
+			colName := columns[i]
+			if col == nil {
+				rowData[colName] = nil
 			} else {
-				respuesta = respuesta + ",\n\t{"
-			}
-			campos := 0
-			var value string
-			for i, col := range values {
-				if col == nil {
-					value = ""
+				if strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB") {
+					rowData[colName] = base64.StdEncoding.EncodeToString(col)
 				} else {
-					if(strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB")){
-						value = base64.StdEncoding.EncodeToString(col)
-					} else {
-						value = string(col)
-						value = strings.ReplaceAll(value, "\"", "")
-						value = strings.ReplaceAll(value, "\n", "\\n")
-					}
-				}
-				if campos == 0 {
-					respuesta = respuesta + "\n\t\t\"" + strings.ReplaceAll(strings.ReplaceAll(columns[i], "\"", ""), "\n", "\\n") + "\": " + "\"" + value + "\""
-					campos = campos + 1
-				} else {
-					respuesta = respuesta + ", \n\t\t\"" + strings.ReplaceAll(strings.ReplaceAll(columns[i], "\"", ""), "\n", "\\n") + "\": " + "\"" + value + "\""
+					// Convertir a string y limpiar caracteres problemáticos
+					strValue := string(col)
+					rowData[colName] = strings.ReplaceAll(strValue, "\"", "'")
 				}
 			}
-			respuesta = respuesta + "\n\t}"
 		}
-
-		if !rows.NextResultSet() {
-			break
-		}
+		results = append(results, rowData)
 	}
-	db.Close()
-	rows.Close()
-	respuesta = respuesta + "\n]"
 
-	if respuesta == "[\n]" && (strings.HasPrefix(query, "CALL ") || strings.HasPrefix(query, "INSERT ") || strings.HasPrefix(query, "UPDATE ") || strings.HasPrefix(query, "DELETE ") || strings.HasPrefix(query, "DROP ") ) {
-		return 0, "{\n\t\"EJECUCION\": \"OK\"\n}"
-	} else {
-		return 0, respuesta
+	if err = rows.Err(); err != nil {
+		return 1, createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err))
 	}
+
+	// Para consultas que no devuelven resultados
+	if len(results) == 0 && isNonReturningQuery(query) {
+		return 0, createSuccessJSON()
+	}
+
+	// Convertir resultados a JSON
+	jsonData, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		return 1, createErrorJSON(fmt.Sprintf("Error al convertir resultados a JSON: %v", err))
+	}
+
+	return 0, string(jsonData)
+}
+
+func isNonReturningQuery(query string) bool {
+	queryUpper := strings.ToUpper(strings.TrimSpace(query))
+	return strings.HasPrefix(queryUpper, "INSERT ") ||
+		strings.HasPrefix(queryUpper, "UPDATE ") ||
+		strings.HasPrefix(queryUpper, "DELETE ") ||
+		strings.HasPrefix(queryUpper, "DROP ") ||
+		strings.HasPrefix(queryUpper, "CREATE ") ||
+		strings.HasPrefix(queryUpper, "ALTER ") ||
+		strings.HasPrefix(queryUpper, "TRUNCATE ") ||
+		strings.HasPrefix(queryUpper, "CALL ")
+}
+
+func createErrorResponse(message string) *C.char {
+	return C.CString(createErrorJSON(message))
+}
+
+func createErrorJSON(message string) string {
+	errResp := ErrorResponse{Error: message}
+	jsonData, _ := json.MarshalIndent(errResp, "", "  ")
+	return string(jsonData)
+}
+
+func createSuccessJSON() string {
+	successResp := SuccessResponse{Status: "OK"}
+	jsonData, _ := json.MarshalIndent(successResp, "", "  ")
+	return string(jsonData)
 }
 
 //export FreeString
