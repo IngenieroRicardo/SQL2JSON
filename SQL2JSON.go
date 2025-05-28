@@ -91,7 +91,6 @@ func sqlRunInternal(conexion, query string, args ...any) (int, string) {
 	}
 	defer db.Close()
 
-	// Verificar si la conexión es válida
 	err = db.Ping()
 	if err != nil {
 		return 1, createErrorJSON(fmt.Sprintf("Error al conectar a la base de datos: %v", err))
@@ -103,58 +102,62 @@ func sqlRunInternal(conexion, query string, args ...any) (int, string) {
 	}
 	defer rows.Close()
 
-	columns, err := rows.Columns()
-	if err != nil {
-		return 1, createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err))
-	}
+	var flatResults []map[string]interface{}
 
-	colTypes, err := rows.ColumnTypes()
-	if err != nil {
-		return 1, createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err))
-	}
-
-	var results []map[string]interface{}
-	values := make([]sql.RawBytes, len(columns))
-	scanArgs := make([]interface{}, len(values))
-	for i := range values {
-		scanArgs[i] = &values[i]
-	}
-
-	for rows.Next() {
-		err = rows.Scan(scanArgs...)
+	for {
+		columns, err := rows.Columns()
 		if err != nil {
-			return 1, createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err))
+			return 1, createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err))
 		}
 
-		rowData := make(map[string]interface{})
-		for i, col := range values {
-			colName := columns[i]
-			if col == nil {
-				rowData[colName] = nil
-			} else {
-				if strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB") {
-					rowData[colName] = base64.StdEncoding.EncodeToString(col)
+		colTypes, err := rows.ColumnTypes()
+		if err != nil {
+			return 1, createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err))
+		}
+
+		values := make([]sql.RawBytes, len(columns))
+		scanArgs := make([]interface{}, len(values))
+		for i := range values {
+			scanArgs[i] = &values[i]
+		}
+
+		for rows.Next() {
+			err = rows.Scan(scanArgs...)
+			if err != nil {
+				return 1, createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err))
+			}
+
+			rowData := make(map[string]interface{})
+			for i, col := range values {
+				colName := columns[i]
+				if col == nil {
+					rowData[colName] = nil
 				} else {
-					// Convertir a string y limpiar caracteres problemáticos
-					strValue := string(col)
-					rowData[colName] = strings.ReplaceAll(strValue, "\"", "'")
+					if strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB") {
+						rowData[colName] = base64.StdEncoding.EncodeToString(col)
+					} else {
+						strValue := string(col)
+						rowData[colName] = strings.ReplaceAll(strValue, "\"", "'")
+					}
 				}
 			}
+			flatResults = append(flatResults, rowData)
 		}
-		results = append(results, rowData)
+
+		if err = rows.Err(); err != nil {
+			return 1, createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err))
+		}
+
+		if !rows.NextResultSet() {
+			break
+		}
 	}
 
-	if err = rows.Err(); err != nil {
-		return 1, createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err))
-	}
-
-	// Para consultas que no devuelven resultados
-	if len(results) == 0 && isNonReturningQuery(query) {
+	if len(flatResults) == 0 && isNonReturningQuery(query) {
 		return 0, createSuccessJSON()
 	}
 
-	// Convertir resultados a JSON
-	jsonData, err := json.MarshalIndent(results, "", "  ")
+	jsonData, err := json.MarshalIndent(flatResults, "", "  ")
 	if err != nil {
 		return 1, createErrorJSON(fmt.Sprintf("Error al convertir resultados a JSON: %v", err))
 	}
