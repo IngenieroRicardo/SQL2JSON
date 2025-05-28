@@ -157,7 +157,17 @@ func sqlRunInternal(conexion, query string, args ...any) (int, string) {
 		return 0, createSuccessJSON()
 	}
 
-	jsonData, err := json.MarshalIndent(flatResults, "", "  ")
+	// Modificación para manejar arrays de un solo elemento
+	var jsonData []byte
+
+	if len(flatResults) == 1 {
+		// Si hay solo un resultado, devolver el objeto directamente sin el array
+		jsonData, err = json.MarshalIndent(flatResults[0], "", "  ")
+	} else {
+		// Si hay cero o múltiples resultados, devolver el array normal
+		jsonData, err = json.MarshalIndent(flatResults, "", "  ")
+	}
+	
 	if err != nil {
 		return 1, createErrorJSON(fmt.Sprintf("Error al convertir resultados a JSON: %v", err))
 	}
