@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"unsafe"
+	"bytes"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -85,94 +86,93 @@ func SQLrun(conexion *C.char, query *C.char, args **C.char, argCount C.int) *C.c
 }
 
 func sqlRunInternal(conexion, query string, args ...any) (int, string) {
-	db, err := sql.Open("mysql", conexion)
-	if err != nil {
-		return 1, createErrorJSON(fmt.Sprintf("Error al abrir conexión: %v", err))
-	}
-	defer db.Close()
+    db, err := sql.Open("mysql", conexion)
+    if err != nil {
+        return 1, createErrorJSON(fmt.Sprintf("Error al abrir conexión: %v", err))
+    }
+    defer db.Close()
 
-	err = db.Ping()
-	if err != nil {
-		return 1, createErrorJSON(fmt.Sprintf("Error al conectar a la base de datos: %v", err))
-	}
+    err = db.Ping()
+    if err != nil {
+        return 1, createErrorJSON(fmt.Sprintf("Error al conectar a la base de datos: %v", err))
+    }
 
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return 1, createErrorJSON(fmt.Sprintf("Error en la consulta SQL: %v", err))
-	}
-	defer rows.Close()
+    rows, err := db.Query(query, args...)
+    if err != nil {
+        return 1, createErrorJSON(fmt.Sprintf("Error en la consulta SQL: %v", err))
+    }
+    defer rows.Close()
 
-	var flatResults []map[string]interface{}
+    // Buffer para construir el JSON de forma incremental
+    var buf bytes.Buffer
+    buf.WriteString("[")
 
-	for {
-		columns, err := rows.Columns()
-		if err != nil {
-			return 1, createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err))
-		}
+    firstRow := true
+    for {
+        columns, err := rows.Columns()
+        if err != nil {
+            return 1, createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err))
+        }
 
-		colTypes, err := rows.ColumnTypes()
-		if err != nil {
-			return 1, createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err))
-		}
+        colTypes, err := rows.ColumnTypes()
+        if err != nil {
+            return 1, createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err))
+        }
 
-		values := make([]sql.RawBytes, len(columns))
-		scanArgs := make([]interface{}, len(values))
-		for i := range values {
-			scanArgs[i] = &values[i]
-		}
+        values := make([]interface{}, len(columns))
+        for i := range values {
+            values[i] = new(sql.RawBytes)
+        }
 
-		for rows.Next() {
-			err = rows.Scan(scanArgs...)
-			if err != nil {
-				return 1, createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err))
-			}
+        for rows.Next() {
+            err = rows.Scan(values...)
+            if err != nil {
+                return 1, createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err))
+            }
 
-			rowData := make(map[string]interface{})
-			for i, col := range values {
-				colName := columns[i]
-				if col == nil {
-					rowData[colName] = nil
-				} else {
-					if strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB") {
-						rowData[colName] = base64.StdEncoding.EncodeToString(col)
-					} else {
-						strValue := string(col)
-						rowData[colName] = strings.ReplaceAll(strValue, "\"", "'")
-					}
-				}
-			}
-			flatResults = append(flatResults, rowData)
-		}
+            if firstRow {
+                firstRow = false
+            } else {
+                buf.WriteString(",")
+            }
 
-		if err = rows.Err(); err != nil {
-			return 1, createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err))
-		}
+            buf.WriteString("{")
+            for i, _ := range values {
+                if i > 0 {
+                    buf.WriteString(",")
+                }
+                fmt.Fprintf(&buf, "\"%s\":", columns[i])
 
-		if !rows.NextResultSet() {
-			break
-		}
-	}
+                rb := *(values[i].(*sql.RawBytes))
+                if rb == nil {
+                    buf.WriteString("null")
+                } else {
+                    if strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB") {
+                        fmt.Fprintf(&buf, "\"%s\"", base64.StdEncoding.EncodeToString(rb))
+                    } else {
+                        strValue := strings.ReplaceAll(string(rb), "\"", "'")
+                        fmt.Fprintf(&buf, "\"%s\"", strValue)
+                    }
+                }
+            }
+            buf.WriteString("}")
+        }
 
-	if len(flatResults) == 0 && isNonReturningQuery(query) {
-		return 0, createSuccessJSON()
-	}
+        if err = rows.Err(); err != nil {
+            return 1, createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err))
+        }
 
-	// Modificación para manejar arrays de un solo elemento
-	var jsonData []byte
+        if !rows.NextResultSet() {
+            break
+        }
+    }
+    buf.WriteString("]")
 
-	if len(flatResults) == 1 {
-		// Si hay solo un resultado, devolver el objeto directamente sin el array
-		jsonData, err = json.MarshalIndent(flatResults[0], "", "  ")
-	} else {
-		// Si hay cero o múltiples resultados, devolver el array normal
-		jsonData, err = json.MarshalIndent(flatResults, "", "  ")
-	}
-	
-	if err != nil {
-		return 1, createErrorJSON(fmt.Sprintf("Error al convertir resultados a JSON: %v", err))
-	}
+    if buf.Len() == 2 && isNonReturningQuery(query) { // Solo contiene "["
+        return 0, createSuccessJSON()
+    }
 
-	return 0, string(jsonData)
+    return 0, buf.String()
 }
 
 func isNonReturningQuery(query string) bool {
