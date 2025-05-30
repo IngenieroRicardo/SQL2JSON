@@ -288,9 +288,9 @@ func sqlRunInternal(conexion, query string, args ...any) internalResult {
             }
         }
         return internalResult{
-            json:     "[]",
+            json:     resultsets[0],
             is_error: 0,
-            is_empty: 1,
+            is_empty: 0,
         }
 
     default:
