@@ -59,34 +59,44 @@ int main() {
 
 ```C
 #include <stdio.h>
-#include <stdlib.h>
 #include "SQL2JSON.h"
 
 int main() {
-    char* conn = "root:123456@tcp(127.0.0.1:3306)/chat";
-    char* query = "INSERT INTO chat.usuario(nickname, picture) VALUES (?, ?);";
+    // Ejemplo de conexión e inserción
+    char* conexion = "root:123456@tcp(127.0.0.1:3306)/test";
     
-    // Preparar argumentos
-    char* args[2];
-    args[0] = "Ricardo";  // String simple
-    args[1] = "blob::iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAArSURBVBhXY/iPA0AlGBgwGFAKlwQmAKrAIgcVRZODCsI5cAAVgVDo4P9/AHe4m2U/OJCWAAAAAElFTkSuQmCC";  // Imagen en base64
-
-    // Convertir a arreglo de char*
-    char** args_ptr = (char**)malloc(2 * sizeof(char*));
+    // Ejemplo 1: Consulta INSERT con parámetros
+    char* consulta_insert = "INSERT INTO chat.usuario(nickname, picture) VALUES (?, ?);";
+    
+    // Preparar los argumentos para el INSERT
+    char* argumentos_insert[2];
+    argumentos_insert[0] = "Ricardo";  // Parámetro de tipo cadena (nickname)
+    // Parámetro de tipo blob (imagen codificada en base64)
+    argumentos_insert[1] = "blob::iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAArSURBVBhXY/iPA0AlGBgwGFAKlwQmAKrAIgcVRZODCsI5cAAVgVDo4P9/AHe4m2U/OJCWAAAAAElFTkSuQmCC";
+    
+    // Convertir a un arreglo de char** (necesario para la función SQLrun)
+    char** ptr_argumentos_insert = (char**)malloc(2 * sizeof(char*));
     for (int i = 0; i < 2; i++) {
-        args_ptr[i] = strdup(args[i]);
+        ptr_argumentos_insert[i] = strdup(argumentos_insert[i]); // Copiar cada argumento
     }
     
-    // Ejecutar consulta
-    char* result = SQLrun(conn, query, args_ptr, 2);
-    printf("Resultado: %s\n", result);
+    // Ejecutar la consulta INSERT
+    SQLResult resultado_insert = SQLrun(conexion, consulta_insert, ptr_argumentos_insert, 2);
     
-    // Liberar memoria
-    FreeString(result);
+    // Mostrar los resultados
+    printf("Resultado del INSERT:\n");
+    printf("JSON: %s\n", resultado_insert.json);         // Respuesta en formato JSON
+    printf("Es error: %d\n", resultado_insert.is_error); // 1 si hubo error, 0 si éxito
+    printf("Está vacío: %d\n\n", resultado_insert.is_empty); // 1 para consultas que no retornan datos
+    
+    // Liberar los recursos utilizados
+    FreeSQLResult(&resultado_insert); // Liberar la memoria del resultado
+    
+    // Liberar los argumentos copiados
     for (int i = 0; i < 2; i++) {
-        free(args_ptr[i]);
+        free(ptr_argumentos_insert[i]);
     }
-    free(args_ptr);
+    free(ptr_argumentos_insert); // Liberar el arreglo de argumentos
     
     return 0;
 }
