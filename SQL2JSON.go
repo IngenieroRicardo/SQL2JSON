@@ -112,164 +112,189 @@ type internalResult struct {
 }
 
 func sqlRunInternal(conexion, query string, args ...any) internalResult {
-	db, err := sql.Open("mysql", conexion)
-	if err != nil {
-		return internalResult{
-			json:     createErrorJSON(fmt.Sprintf("Error al abrir conexión: %v", err)),
-			is_error: 1,
-			is_empty: 0,
-		}
-	}
-	defer db.Close()
+    db, err := sql.Open("mysql", conexion)
+    if err != nil {
+        return internalResult{
+            json:     createErrorJSON(fmt.Sprintf("Error al abrir conexión: %v", err)),
+            is_error: 1,
+            is_empty: 0,
+        }
+    }
+    defer db.Close()
 
-	err = db.Ping()
-	if err != nil {
-		return internalResult{
-			json:     createErrorJSON(fmt.Sprintf("Error al conectar a la base de datos: %v", err)),
-			is_error: 1,
-			is_empty: 0,
-		}
-	}
+    err = db.Ping()
+    if err != nil {
+        return internalResult{
+            json:     createErrorJSON(fmt.Sprintf("Error al conectar a la base de datos: %v", err)),
+            is_error: 1,
+            is_empty: 0,
+        }
+    }
 
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return internalResult{
-			json:     createErrorJSON(fmt.Sprintf("Error en la consulta SQL: %v", err)),
-			is_error: 1,
-			is_empty: 0,
-		}
-	}
-	defer rows.Close()
+    rows, err := db.Query(query, args...)
+    if err != nil {
+        return internalResult{
+            json:     createErrorJSON(fmt.Sprintf("Error en la consulta SQL: %v", err)),
+            is_error: 1,
+            is_empty: 0,
+        }
+    }
+    defer rows.Close()
 
-	columns, err := rows.Columns()
-	if err != nil {
-		return internalResult{
-			json:     createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err)),
-			is_error: 1,
-			is_empty: 0,
-		}
-	}
+    var resultsets []string
+    resultSetCount := 0
 
-	// Verificar si hay un campo llamado "JSON" (case insensitive)
-	hasJSONField := false
-	jsonFieldIndex := -1
-	for i, col := range columns {
-		if strings.ToUpper(col) == "JSON" {
-			hasJSONField = true
-			jsonFieldIndex = i
-			break
-		}
-	}
+    for {
+        columns, err := rows.Columns()
+        if err != nil {
+            return internalResult{
+                json:     createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err)),
+                is_error: 1,
+                is_empty: 0,
+            }
+        }
 
-	var buf bytes.Buffer
-	rowCount := 0
+        // Verificar si hay un campo llamado "JSON" (case insensitive)
+        hasJSONField := false
+        jsonFieldIndex := -1
+        for i, col := range columns {
+            if strings.ToUpper(col) == "JSON" {
+                hasJSONField = true
+                jsonFieldIndex = i
+                break
+            }
+        }
 
-	colTypes, err := rows.ColumnTypes()
-	if err != nil {
-		return internalResult{
-			json:     createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err)),
-			is_error: 1,
-			is_empty: 0,
-		}
-	}
+        var buf bytes.Buffer
+        rowCount := 0
 
-	values := make([]interface{}, len(columns))
-	for i := range values {
-		values[i] = new(sql.RawBytes)
-	}
+        colTypes, err := rows.ColumnTypes()
+        if err != nil {
+            return internalResult{
+                json:     createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err)),
+                is_error: 1,
+                is_empty: 0,
+            }
+        }
 
-	if rowCount == 0 {
-		buf.WriteString("[")
-	}
+        values := make([]interface{}, len(columns))
+        for i := range values {
+            values[i] = new(sql.RawBytes)
+        }
 
-	for rows.Next() {
-		if rowCount > 0 {
-			buf.WriteString(",")
-		}
+        buf.WriteString("[")
+        
+        for rows.Next() {
+            if rowCount > 0 {
+                buf.WriteString(",")
+            }
 
-		err = rows.Scan(values...)
-		if err != nil {
-			return internalResult{
-				json:     createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err)),
-				is_error: 1,
-				is_empty: 0,
-			}
-		}
+            err = rows.Scan(values...)
+            if err != nil {
+                return internalResult{
+                    json:     createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err)),
+                    is_error: 1,
+                    is_empty: 0,
+                }
+            }
 
-		if hasJSONField {
-			// Si hay un campo JSON, usamos solo ese campo
-			rb := *(values[jsonFieldIndex].(*sql.RawBytes))
-			if rb == nil {
-				buf.WriteString("null")
-			} else {
-				jsonStr := string(rb)
-				// Validamos que sea un JSON válido
-				if !json.Valid(rb) {
-					return internalResult{
-						json:     createErrorJSON("El campo JSON no contiene un JSON válido"),
-						is_error: 1,
-						is_empty: 0,
-					}
-				}
-				buf.WriteString(jsonStr)
-			}
-		} else {
-			// Comportamiento normal para todas las columnas
-			buf.WriteString("{")
-			for i := range values {
-				if i > 0 {
-					buf.WriteString(",")
-				}
-				fmt.Fprintf(&buf, "\"%s\":", columns[i])
+            if hasJSONField {
+                // Si hay un campo JSON, usamos solo ese campo
+                rb := *(values[jsonFieldIndex].(*sql.RawBytes))
+                if rb == nil {
+                    buf.WriteString("null")
+                } else {
+                    jsonStr := string(rb)
+                    // Validamos que sea un JSON válido
+                    if !json.Valid(rb) {
+                        return internalResult{
+                            json:     createErrorJSON("El campo JSON no contiene un JSON válido"),
+                            is_error: 1,
+                            is_empty: 0,
+                        }
+                    }
+                    buf.WriteString(jsonStr)
+                }
+            } else {
+                // Comportamiento normal para todas las columnas
+                buf.WriteString("{")
+                for i := range values {
+                    if i > 0 {
+                        buf.WriteString(",")
+                    }
+                    fmt.Fprintf(&buf, "\"%s\":", columns[i])
 
-				rb := *(values[i].(*sql.RawBytes))
-				if rb == nil {
-					buf.WriteString("null")
-				} else {
-					if strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB") {
-						fmt.Fprintf(&buf, "\"%s\"", base64.StdEncoding.EncodeToString(rb))
-					} else {
-						strValue := strings.ReplaceAll(string(rb), "\"", "'")
-						fmt.Fprintf(&buf, "\"%s\"", strValue)
-					}
-				}
-			}
-			buf.WriteString("}")
-		}
-		rowCount++
-	}
+                    rb := *(values[i].(*sql.RawBytes))
+                    if rb == nil {
+                        buf.WriteString("null")
+                    } else {
+                        if strings.Contains(colTypes[i].DatabaseTypeName(), "BLOB") {
+                            fmt.Fprintf(&buf, "\"%s\"", base64.StdEncoding.EncodeToString(rb))
+                        } else {
+                            strValue := strings.ReplaceAll(string(rb), "\"", "'")
+                            fmt.Fprintf(&buf, "\"%s\"", strValue)
+                        }
+                    }
+                }
+                buf.WriteString("}")
+            }
+            rowCount++
+        }
 
-	if err = rows.Err(); err != nil {
-		return internalResult{
-			json:     createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err)),
-			is_error: 1,
-			is_empty: 0,
-		}
-	}
+        buf.WriteString("]")
+        
+        if err = rows.Err(); err != nil {
+            return internalResult{
+                json:     createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err)),
+                is_error: 1,
+                is_empty: 0,
+            }
+        }
 
-	if rowCount > 0 {
-		buf.WriteString("]")
-		return internalResult{
-			json:     buf.String(),
-			is_error: 0,
-			is_empty: 0,
-		}
-	}
+        // Solo agregamos el resultset si tiene filas o es el primer resultset
+        if rowCount > 0 || resultSetCount == 0 {
+            resultsets = append(resultsets, buf.String())
+            resultSetCount++
+        }
 
-	if isNonReturningQuery(query) {
-		return internalResult{
-			json:     createSuccessJSON(),
-			is_error: 0,
-			is_empty: 1,
-		}
-	}
+        // Pasamos al siguiente resultset si existe
+        if !rows.NextResultSet() {
+            break
+        }
+    }
 
-	// Consulta que debería retornar datos pero no retornó nada
-	return internalResult{
-		json:     "[]",
-		is_error: 0,
-		is_empty: 1,
-	}
+    // Construimos la respuesta final
+    switch {
+    case resultSetCount == 0:
+        if isNonReturningQuery(query) {
+            return internalResult{
+                json:     createSuccessJSON(),
+                is_error: 0,
+                is_empty: 1,
+            }
+        }
+        return internalResult{
+            json:     "[]",
+            is_error: 0,
+            is_empty: 1,
+        }
+
+    case resultSetCount == 1:
+        return internalResult{
+            json:     resultsets[0],
+            is_error: 0,
+            is_empty: 0,
+        }
+
+    default:
+        // Para múltiples resultsets, los combinamos en un array JSON
+        combined := "[" + strings.Join(resultsets, ",") + "]"
+        return internalResult{
+            json:     combined,
+            is_error: 0,
+            is_empty: 0,
+        }
+    }
 }
 
 func isNonReturningQuery(query string) bool {
