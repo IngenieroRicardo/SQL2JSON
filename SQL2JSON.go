@@ -305,15 +305,16 @@ func sqlRunInternal(conexion, query string, args ...any) internalResult {
 }
 
 func isNonReturningQuery(query string) bool {
-	queryUpper := strings.ToUpper(strings.TrimSpace(query))
-	return strings.HasPrefix(queryUpper, "INSERT ") ||
-		strings.HasPrefix(queryUpper, "UPDATE ") ||
-		strings.HasPrefix(queryUpper, "DELETE ") ||
-		strings.HasPrefix(queryUpper, "DROP ") ||
-		strings.HasPrefix(queryUpper, "CREATE ") ||
-		strings.HasPrefix(queryUpper, "ALTER ") ||
-		strings.HasPrefix(queryUpper, "TRUNCATE ") ||
-		strings.HasPrefix(queryUpper, "CALL ")
+    queryUpper := strings.ToUpper(strings.TrimSpace(query))
+    return strings.HasPrefix(queryUpper, "INSERT ") ||
+        strings.HasPrefix(queryUpper, "UPDATE ") ||
+        strings.HasPrefix(queryUpper, "DELETE ") ||
+        strings.HasPrefix(queryUpper, "REPLACE ") ||
+        strings.HasPrefix(queryUpper, "DROP ") ||
+        strings.HasPrefix(queryUpper, "CREATE ") ||
+        strings.HasPrefix(queryUpper, "ALTER ") ||
+        strings.HasPrefix(queryUpper, "TRUNCATE ") ||
+        strings.HasPrefix(queryUpper, "CALL ")
 }
 
 func createErrorJSON(message string) string {
