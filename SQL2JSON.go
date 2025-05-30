@@ -141,51 +141,80 @@ func sqlRunInternal(conexion, query string, args ...any) internalResult {
 	}
 	defer rows.Close()
 
+	columns, err := rows.Columns()
+	if err != nil {
+		return internalResult{
+			json:     createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err)),
+			is_error: 1,
+			is_empty: 0,
+		}
+	}
+
+	// Verificar si hay un campo llamado "JSON" (case insensitive)
+	hasJSONField := false
+	jsonFieldIndex := -1
+	for i, col := range columns {
+		if strings.ToUpper(col) == "JSON" {
+			hasJSONField = true
+			jsonFieldIndex = i
+			break
+		}
+	}
+
 	var buf bytes.Buffer
 	rowCount := 0
 
-	for {
-		columns, err := rows.Columns()
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return internalResult{
+			json:     createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err)),
+			is_error: 1,
+			is_empty: 0,
+		}
+	}
+
+	values := make([]interface{}, len(columns))
+	for i := range values {
+		values[i] = new(sql.RawBytes)
+	}
+
+	if rowCount == 0 {
+		buf.WriteString("[")
+	}
+
+	for rows.Next() {
+		if rowCount > 0 {
+			buf.WriteString(",")
+		}
+
+		err = rows.Scan(values...)
 		if err != nil {
 			return internalResult{
-				json:     createErrorJSON(fmt.Sprintf("Error al obtener columnas: %v", err)),
+				json:     createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err)),
 				is_error: 1,
 				is_empty: 0,
 			}
 		}
 
-		colTypes, err := rows.ColumnTypes()
-		if err != nil {
-			return internalResult{
-				json:     createErrorJSON(fmt.Sprintf("Error al obtener tipos de columna: %v", err)),
-				is_error: 1,
-				is_empty: 0,
-			}
-		}
-
-		values := make([]interface{}, len(columns))
-		for i := range values {
-			values[i] = new(sql.RawBytes)
-		}
-
-		if rowCount == 0 {
-			buf.WriteString("[")
-		}
-
-		for rows.Next() {
-			if rowCount > 0 {
-				buf.WriteString(",")
-			}
-
-			err = rows.Scan(values...)
-			if err != nil {
-				return internalResult{
-					json:     createErrorJSON(fmt.Sprintf("Error al escanear fila: %v", err)),
-					is_error: 1,
-					is_empty: 0,
+		if hasJSONField {
+			// Si hay un campo JSON, usamos solo ese campo
+			rb := *(values[jsonFieldIndex].(*sql.RawBytes))
+			if rb == nil {
+				buf.WriteString("null")
+			} else {
+				jsonStr := string(rb)
+				// Validamos que sea un JSON válido
+				if !json.Valid(rb) {
+					return internalResult{
+						json:     createErrorJSON("El campo JSON no contiene un JSON válido"),
+						is_error: 1,
+						is_empty: 0,
+					}
 				}
+				buf.WriteString(jsonStr)
 			}
-
+		} else {
+			// Comportamiento normal para todas las columnas
 			buf.WriteString("{")
 			for i := range values {
 				if i > 0 {
@@ -206,19 +235,15 @@ func sqlRunInternal(conexion, query string, args ...any) internalResult {
 				}
 			}
 			buf.WriteString("}")
-			rowCount++
 		}
+		rowCount++
+	}
 
-		if err = rows.Err(); err != nil {
-			return internalResult{
-				json:     createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err)),
-				is_error: 1,
-				is_empty: 0,
-			}
-		}
-
-		if !rows.NextResultSet() {
-			break
+	if err = rows.Err(); err != nil {
+		return internalResult{
+			json:     createErrorJSON(fmt.Sprintf("Error después de iterar filas: %v", err)),
+			is_error: 1,
+			is_empty: 0,
 		}
 	}
 
