@@ -280,10 +280,17 @@ func sqlRunInternal(conexion, query string, args ...any) internalResult {
         }
 
     case resultSetCount == 1:
+        if isNonReturningQuery(query) {
+            return internalResult{
+                json:     createSuccessJSON(),
+                is_error: 0,
+                is_empty: 1,
+            }
+        }
         return internalResult{
-            json:     resultsets[0],
+            json:     "[]",
             is_error: 0,
-            is_empty: 0,
+            is_empty: 1,
         }
 
     default:
