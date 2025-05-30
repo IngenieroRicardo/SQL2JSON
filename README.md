@@ -28,22 +28,26 @@ Fue recompilada usando el siguiente comando: go build -o SQL2JSON.dll -buildmode
 
 ```C
 #include <stdio.h>
-#include <stdlib.h>
 #include "SQL2JSON.h"
 
 int main() {
-    // Configuración de conexión
+    // Ejemplo de conexión y consulta
     char* conexion = "root:123456@tcp(127.0.0.1:3306)/test";
+    char* query = "SELECT now();";
     
-    // Consulta SQL con parámetros
-    char* query = "select now();";
-        
-    // Llamar a la función
-    char* result = SQLrun(conexion, query, 0, 0);
-    printf("Resultado: %s\n", result);
+    SQLResult resultado = SQLrun(conexion, query, NULL, 0);
+    
+    if (resultado.is_error) {
+        printf("Error: %s\n", resultado.json);
+    } else if (resultado.is_empty) {
+        printf("Consulta ejecutada pero no retornó datos\n");
+        printf("JSON: %s\n", resultado.json); // Mostrará {"status":"OK"} o []
+    } else {
+        printf("Datos obtenidos:\n%s\n", resultado.json);
+    }
     
     // Liberar memoria
-    FreeString(result);
+    FreeSQLResult(&resultado);
     
     return 0;
 }
